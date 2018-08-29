@@ -13,39 +13,39 @@ module Devise
       end
 
       def after_saml_authentication(session_index)
-        if Devise.saml_session_index_key && self.respond_to?(Devise.saml_session_index_key)
-          self.update_attribute(Devise.saml_session_index_key, session_index)
+        if Devise.saml_session_index_key && respond_to?(Devise.saml_session_index_key)
+          update_attribute(Devise.saml_session_index_key, session_index)
         end
       end
 
       def authenticatable_salt
         if Devise.saml_session_index_key &&
-           self.respond_to?(Devise.saml_session_index_key) &&
-           self.send(Devise.saml_session_index_key).present?
-          self.send(Devise.saml_session_index_key)
+           respond_to?(Devise.saml_session_index_key) &&
+           send(Devise.saml_session_index_key).present?
+          send(Devise.saml_session_index_key)
         else
           super
         end
       end
 
       module ClassMethods
-        def authenticate_with_saml(saml_response, relay_state)
+        def authenticate_with_saml(saml_response, _relay_state)
           key = Devise.saml_default_user_key
           decorated_response = ::SamlAuthenticatable::SamlResponse.new(
             saml_response,
             attribute_map
           )
-          if (Devise.saml_use_subject)
-            auth_value = saml_response.name_id
-          else
-            auth_value = decorated_response.attribute_value_by_resource_key(key)
-          end
+          auth_value = if Devise.saml_use_subject
+                         saml_response.name_id
+                       else
+                         decorated_response.attribute_value_by_resource_key(key)
+                       end
           auth_value.try(:downcase!) if Devise.case_insensitive_keys.include?(key)
 
           resource = Devise.saml_resource_locator.call(self, decorated_response, auth_value)
 
           if Devise.saml_resource_validator
-            if not Devise.saml_resource_validator.new.validate(resource, saml_response)
+            unless Devise.saml_resource_validator.new.validate(resource, saml_response)
               logger.info("User(#{auth_value}) did not pass custom validation.")
               return nil
             end
@@ -56,7 +56,7 @@ module Devise
               logger.info("Creating user(#{auth_value}).")
               resource = new
             else
-              logger.info("User(#{auth_value}) not found.  Not configured to create the user.")
+              logger.info("User(#{auth_value}) not found. Not configured to create the user.")
               return nil
             end
           end
@@ -84,8 +84,8 @@ module Devise
         private
 
         def attribute_map_for_environment
-          attribute_map = YAML.load(File.read("#{Rails.root}/config/attribute-map.yml"))
-          if attribute_map.has_key?(Rails.env)
+          attribute_map = YAML.safe_load(File.read("#{Rails.root}/config/attribute-map.yml"))
+          if attribute_map.key?(Rails.env)
             attribute_map[Rails.env]
           else
             attribute_map
